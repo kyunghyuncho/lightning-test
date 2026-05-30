@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 import textwrap
 from pathlib import Path
 
@@ -56,7 +57,7 @@ class LightningJobsBackend(BaseInferenceBackend):
                 studio.set_env({"HF_TOKEN": token, "HUGGING_FACE_HUB_TOKEN": token})
 
             studio.run(f"mkdir -p {REMOTE_INPUT} {REMOTE_OUTPUT}")
-            studio.upload_folder(str(input_path), remote_path=REMOTE_INPUT)
+            self._upload_images(studio, image_files)
             self._upload_runner_script(studio, model_id)
             click.echo(f"Running object detection on Lightning Studio ({studio.machine})...")
             output, exit_code = studio.run_with_exit_code(f"python {REMOTE_SCRIPT}")
@@ -110,11 +111,20 @@ class LightningJobsBackend(BaseInferenceBackend):
                     json.dump(predictions, handle, indent=4)
             """
         ).strip()
-        local_script = Path(".lightning_runner.py")
-        local_script.write_text(script, encoding="utf-8")
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".py", delete=False, encoding="utf-8"
+        ) as handle:
+            handle.write(script)
+            temp_path = handle.name
         try:
-            studio.upload_file(str(local_script), remote_path=REMOTE_SCRIPT)
+            studio.upload_file(temp_path, remote_path=REMOTE_SCRIPT)
         finally:
-            local_script.unlink(missing_ok=True)
+            Path(temp_path).unlink(missing_ok=True)
 
         studio.run("pip install click transformers torch pillow tqdm python-dotenv accelerate timm")
+
+    def _upload_images(self, studio, image_files: list[Path]) -> None:
+        """Upload only supported image files; skip videos and other non-image media."""
+        for image_file in image_files:
+            remote_path = f"{REMOTE_INPUT}/{image_file.name}"
+            studio.upload_file(str(image_file), remote_path=remote_path)

@@ -154,7 +154,6 @@ activemq-data/
 # Local configuration dumps containing secrets
 .env
 .env.*
-~/.config/object_detector/
 
 # Cache directories
 .chunks/

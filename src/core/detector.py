@@ -23,11 +23,10 @@ class ObjectDetectorEngine:
         else:
             self.device = "cpu"
 
-        device_index = 0 if self.device == "cuda" else -1
         self.pipe = pipeline(
             "object-detection",
             model=model_id,
-            device=device_index,
+            device=self.device,
             token=token,
         )
 

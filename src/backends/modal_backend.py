@@ -35,10 +35,16 @@ class ModalBackend(BaseInferenceBackend):
         with app.run():
             server_cls = ModalModelServer.with_options(secrets=secrets)
             server = server_cls(model_id=model_id)
-            for img_file in tqdm(image_files, desc="Modal inference"):
-                img_bytes = img_file.read_bytes()
-                predictions = server.predict.remote(img_bytes)
+            img_bytes_list = [img_file.read_bytes() for img_file in image_files]
+            predictions_list = list(
+                tqdm(
+                    server.predict.map(img_bytes_list),
+                    total=len(img_bytes_list),
+                    desc="Modal inference",
+                )
+            )
 
+            for img_file, predictions in zip(image_files, predictions_list):
                 out_file = output_path / f"{img_file.stem}_preds.json"
                 with out_file.open("w", encoding="utf-8") as handle:
                     json.dump(predictions, handle, indent=4)

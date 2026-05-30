@@ -13,9 +13,16 @@ def collect_prediction_reports(output_dir: Path) -> list[tuple[str, list[dict]]]
     reports: list[tuple[str, list[dict]]] = []
     for path in sorted(output_dir.glob("*_preds.json")):
         image_name = path.name.removesuffix("_preds.json")
-        predictions = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(predictions, list):
-            reports.append((image_name, predictions))
+        try:
+            predictions = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(predictions, list):
+                reports.append((image_name, predictions))
+        except json.JSONDecodeError:
+            click.secho(
+                f"Warning: Failed to parse prediction file {path.name}. Skipping.",
+                fg="yellow",
+                err=True,
+            )
     return reports
 
 

@@ -48,6 +48,8 @@ Secrets are stored outside the repository at `~/.config/object_detector/.env` (m
 
 The CLI prompts interactively for missing cloud credentials on first use. For Lightning, it also tries to auto-discover your teamspace from the API; if that fails, you'll be asked for your teamspace name and username. Inference runs directly on a GPU Studio (default `T4`), which should appear as the machine type in the Lightning console.
 
+Only supported image files in the input folder are processed (JPEG, PNG, BMP, GIF, TIFF); other files such as `.mp4` videos and `.webp` are ignored.
+
 ## Usage
 
 Run interactively (prompts for backend, paths, and model):

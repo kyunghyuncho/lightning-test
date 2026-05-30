@@ -47,6 +47,22 @@ def test_collect_prediction_reports_reads_output_dir(tmp_path: Path) -> None:
     assert reports == [("cat", [{"label": "cat", "score": 0.9}])]
 
 
+def test_collect_prediction_reports_skips_corrupt_json(tmp_path: Path) -> None:
+    output_dir = tmp_path / "predictions"
+    output_dir.mkdir()
+    (output_dir / "good_preds.json").write_text(
+        json.dumps([{"label": "cat", "score": 0.9}]),
+        encoding="utf-8",
+    )
+    (output_dir / "bad_preds.json").write_text("not json", encoding="utf-8")
+
+    runner = CliRunner()
+    with runner.isolation():
+        reports = collect_prediction_reports(output_dir)
+
+    assert reports == [("good", [{"label": "cat", "score": 0.9}])]
+
+
 def test_print_detection_samples_renders_summary(tmp_path: Path) -> None:
     output_dir = tmp_path / "predictions"
     output_dir.mkdir()
