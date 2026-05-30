@@ -147,8 +147,22 @@ activemq-data/
 # SageMath parsed files
 *.sage.py
 
-# Environments
+# Local Virtual Environments
+.venv/
+.uv/
+
+# Local configuration dumps containing secrets
 .env
+.env.*
+
+# Cache directories
+.chunks/
+
+# Generated prediction outputs
+predictions/
+test_out/
+
+# Environments
 .envrc
 .venv
 env/
