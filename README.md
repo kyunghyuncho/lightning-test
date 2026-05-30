@@ -42,11 +42,11 @@ Secrets are stored outside the repository at `~/.config/object_detector/.env` (m
 
 | Backend | Environment Variables |
 | --- | --- |
-| Lightning AI | `LIGHTNING_USER_ID`, `LIGHTNING_API_KEY` |
+| Lightning AI | `LIGHTNING_USER_ID`, `LIGHTNING_API_KEY`, `LIGHTNING_TEAMSPACE`, `LIGHTNING_USERNAME` (or `LIGHTNING_ORG`), `LIGHTNING_MACHINE` (default: `T4`) |
 | Modal Labs | `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` |
 | Hugging Face (optional) | `HF_TOKEN` |
 
-The CLI prompts interactively for missing cloud credentials on first use.
+The CLI prompts interactively for missing cloud credentials on first use. For Lightning, it also tries to auto-discover your teamspace from the API; if that fails, you'll be asked for your teamspace name and username. Inference runs directly on a GPU Studio (default `T4`), which should appear as the machine type in the Lightning console.
 
 ## Usage
 
@@ -70,6 +70,24 @@ Force the interactive wizard even when all flags are supplied:
 ```bash
 uv run object-detector --interactive
 ```
+
+After a run completes, the CLI prints a sample summary of detected objects per image (disable with `--no-show-samples`).
+
+### Tab completion
+
+Enable shell tab completion for flags (including folder paths for `--input-dir` and `--output-dir`):
+
+```bash
+# zsh (add to ~/.zshrc)
+eval "$(_OBJECT_DETECTOR_COMPLETE=zsh_source object-detector)"
+
+# bash (add to ~/.bashrc)
+eval "$(_OBJECT_DETECTOR_COMPLETE=bash_source object-detector)"
+```
+
+Then restart your shell or `source` the rc file. Tab-complete after `--input-dir ` or `--output-dir ` to browse folders.
+
+In interactive mode, folder path prompts support tab completion via `prompt_toolkit` (press Tab while typing a path).
 
 ### Local inference
 

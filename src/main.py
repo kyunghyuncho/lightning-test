@@ -8,6 +8,12 @@ from pathlib import Path
 import click
 from dotenv import load_dotenv, set_key
 
+from src.completion import complete_directories
+from src.core.hf_auth import ensure_hf_credentials
+from src.core.lightning_config import ensure_lightning_studio_config
+from src.core.summary import print_detection_samples
+from src.prompts import prompt_directory
+
 CONFIG_DIR = Path.home() / ".config" / "object_detector"
 ENV_FILE = CONFIG_DIR / ".env"
 
@@ -17,7 +23,7 @@ DEFAULT_OUTPUT_DIR = "./predictions"
 
 MODEL_CHOICES = {
     "1": "facebook/detr-resnet-50",
-    "2": "huggingface/yolos-tiny",
+    "2": "hustvl/yolos-tiny",
     "3": "custom",
 }
 
@@ -48,6 +54,8 @@ def interactive_credential_check(backend: str) -> None:
             set_key(str(ENV_FILE), "LIGHTNING_API_KEY", key)
             load_dotenv(ENV_FILE, override=True)
 
+        ensure_lightning_studio_config(interactive=True)
+
     elif backend == "modal":
         if not os.getenv("MODAL_TOKEN_ID") or not os.getenv("MODAL_TOKEN_SECRET"):
             click.secho("\n=== MODAL LABS AUTHENTICATION REQUIRED ===", fg="cyan", bold=True)
@@ -76,27 +84,21 @@ def _prompt_backend() -> str:
 
 
 def _prompt_input_dir() -> str:
-    while True:
-        input_dir = click.prompt("Path to input image folder", type=str)
-        path = Path(input_dir).expanduser()
-        if path.is_dir():
-            return str(path.resolve())
-        click.secho(f"Directory not found: {input_dir}", fg="red")
+    return prompt_directory("Path to input image folder", must_exist=True)
 
 
 def _prompt_output_dir(default: str) -> str:
-    output_dir = click.prompt(
+    return prompt_directory(
         "Path for output JSON predictions",
-        type=str,
+        must_exist=False,
         default=default,
     )
-    return str(Path(output_dir).expanduser())
 
 
 def _prompt_model_id(default: str) -> str:
     click.echo("\nSelect a detection model:")
     click.echo("  1) facebook/detr-resnet-50  (default, high accuracy)")
-    click.echo("  2) huggingface/yolos-tiny   (faster, lighter)")
+    click.echo("  2) hustvl/yolos-tiny         (faster, lighter)")
     click.echo("  3) Enter a custom Hugging Face model ID")
 
     choice = click.prompt("Model choice", type=click.Choice(["1", "2", "3"]), default="1")
@@ -159,15 +161,29 @@ def resolve_run_config(
 )
 @click.option(
     "--input-dir",
-    type=click.Path(exists=True, file_okay=False),
+    type=click.Path(
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        readable=True,
+        resolve_path=True,
+    ),
     default=None,
     help="Path pointing to image folder directory.",
+    shell_complete=complete_directories,
 )
 @click.option(
     "--output-dir",
-    type=click.Path(file_okay=False),
+    type=click.Path(
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        writable=True,
+        resolve_path=True,
+    ),
     default=None,
     help="Local directory to write output JSON reports.",
+    shell_complete=complete_directories,
 )
 @click.option(
     "--model-id",
@@ -180,12 +196,34 @@ def resolve_run_config(
     default=None,
     help="Force interactive prompts even when all options are supplied.",
 )
+@click.option(
+    "--show-samples/--no-show-samples",
+    default=True,
+    help="Print detected objects per image after the run completes.",
+)
+@click.option(
+    "--sample-min-score",
+    type=float,
+    default=0.5,
+    show_default=True,
+    help="Minimum confidence score to include in sample output.",
+)
+@click.option(
+    "--sample-limit",
+    type=int,
+    default=5,
+    show_default=True,
+    help="Maximum detections to show per image in the sample output.",
+)
 def run_pipeline(
     backend: str | None,
     input_dir: str | None,
     output_dir: str | None,
     model_id: str | None,
     interactive: bool | None,
+    show_samples: bool,
+    sample_min_score: float,
+    sample_limit: int,
 ) -> None:
     """Cross-backend object detection orchestration CLI."""
     use_interactive = (
@@ -201,6 +239,7 @@ def run_pipeline(
     )
 
     interactive_credential_check(backend)
+    ensure_hf_credentials(interactive=use_interactive)
 
     if backend == "local":
         from src.backends.local import LocalBackend
@@ -219,6 +258,14 @@ def run_pipeline(
 
     click.echo(f"\nInitializing pipeline on backend: {backend}")
     engine.execute(input_dir=input_dir, output_dir=output_dir, model_id=model_id)
+
+    if show_samples:
+        print_detection_samples(
+            output_dir,
+            min_score=sample_min_score,
+            limit=sample_limit,
+        )
+
     click.secho("Workflow successfully processed and concluded.", fg="green", bold=True)
 
 

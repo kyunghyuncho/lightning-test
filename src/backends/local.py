@@ -9,8 +9,7 @@ from tqdm import tqdm
 
 from src.backends.base import BaseInferenceBackend
 from src.core.detector import ObjectDetectorEngine
-
-IMAGE_GLOB = "*.[jJ][pP][gG]"
+from src.core.images import list_image_files, no_images_error_message
 
 
 class LocalBackend(BaseInferenceBackend):
@@ -21,9 +20,9 @@ class LocalBackend(BaseInferenceBackend):
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
-        image_files = sorted(input_path.glob(IMAGE_GLOB))
+        image_files = list_image_files(input_path)
         if not image_files:
-            raise FileNotFoundError(f"No JPEG images found in {input_dir}")
+            raise FileNotFoundError(no_images_error_message(input_dir))
 
         engine = ObjectDetectorEngine(model_id=model_id)
 
