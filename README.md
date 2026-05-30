@@ -75,6 +75,19 @@ uv run object-detector --interactive
 
 After a run completes, the CLI prints a sample summary of detected objects per image (disable with `--no-show-samples`).
 
+### Results viewer (browser)
+
+A self-contained HTML page draws bounding boxes on your images from the CLI JSON output. No install or server — open the file in a browser and select your folders:
+
+```bash
+open viewer/index.html   # macOS
+```
+
+1. **Images folder** — same directory you passed to `--input-dir` (e.g. `./test_images/`).
+2. **Predictions folder** — output from `--output-dir` (e.g. `./predictions/`, files named `stem_preds.json`).
+
+Use the confidence slider to filter low-score detections.
+
 ### Tab completion
 
 Enable shell tab completion for flags (including folder paths for `--input-dir` and `--output-dir`):

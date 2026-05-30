@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Object detection viewer</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --border: #2d3a4f;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3d8bfd;
+      --accent-dim: #2563c4;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+    }
+
+    header h1 {
+      margin: 0 0 0.35rem;
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+
+    header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
+
+    .controls {
+      display: grid;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    @media (min-width: 640px) {
+      .controls {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .control-group {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
+    .control-group label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+
+    input[type="file"] {
+      width: 100%;
+      font-size: 0.85rem;
+      color: var(--text);
+    }
+
+    .slider-row {
+      margin-top: 1rem;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
+    .slider-row label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.9rem;
+      margin-bottom: 0.5rem;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+
+    .status {
+      margin: 1rem 0;
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      background: var(--panel);
+      border: 1px solid var(--border);
+    }
+
+    .status.error {
+      border-color: #c44;
+      color: #f8b4b4;
+    }
+
+    .status.ok {
+      border-color: #3a6;
+      color: #b8e6c8;
+    }
+
+    .viewer {
+      display: none;
+      grid-template-columns: 200px 1fr;
+      gap: 1.25rem;
+      align-items: start;
+    }
+
+    .viewer.visible {
+      display: grid;
+    }
+
+    @media (max-width: 720px) {
+      .viewer.visible {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .thumbs {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+
+    .thumb {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.5rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--panel);
+      cursor: pointer;
+      text-align: left;
+      color: var(--text);
+      font-size: 0.8rem;
+    }
+
+    .thumb:hover,
+    .thumb.active {
+      border-color: var(--accent);
+      background: #243044;
+    }
+
+    .thumb img {
+      width: 40px;
+      height: 40px;
+      object-fit: cover;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+
+    .canvas-wrap {
+      position: relative;
+      background: #000;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      line-height: 0;
+    }
+
+    .canvas-wrap canvas,
+    .canvas-wrap img {
+      display: block;
+      max-width: 100%;
+      height: auto;
+    }
+
+    .canvas-wrap canvas {
+      position: absolute;
+      left: 0;
+      top: 0;
+      pointer-events: none;
+    }
+
+    .meta h2 {
+      margin: 0.75rem 0 0.35rem;
+      font-size: 1rem;
+    }
+
+    .detections {
+      list-style: none;
+      margin: 0.5rem 0 0;
+      padding: 0;
+    }
+
+    .detections li {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 0;
+      font-size: 0.88rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .detections li:last-child {
+      border-bottom: none;
+    }
+
+    .swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .empty-hint {
+      color: var(--muted);
+      font-size: 0.9rem;
+      padding: 2rem 0;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Object detection viewer</h1>
+    <p>
+      Select your original <strong>images</strong> folder and the CLI <strong>predictions</strong> folder
+      (files named <code>stem_preds.json</code>). Runs entirely in the browser — no server required.
+    </p>
+  </header>
+
+  <main>
+    <section class="controls">
+      <div class="control-group">
+        <label for="images-input">Images folder</label>
+        <input id="images-input" type="file" webkitdirectory directory multiple />
+      </div>
+      <div class="control-group">
+        <label for="preds-input">Predictions folder</label>
+        <input id="preds-input" type="file" webkitdirectory directory multiple accept=".json,application/json" />
+      </div>
+    </section>
+
+    <div class="slider-row">
+      <label>
+        <span>Minimum confidence</span>
+        <span id="threshold-value">50%</span>
+      </label>
+      <input id="threshold" type="range" min="0" max="100" value="50" />
+    </div>
+
+    <div id="status" class="status">Choose both folders to begin.</div>
+
+    <section id="viewer" class="viewer" aria-live="polite">
+      <nav class="thumbs" id="thumbs" aria-label="Images"></nav>
+      <div>
+        <div class="canvas-wrap" id="canvas-wrap">
+          <img id="photo" alt="" />
+          <canvas id="overlay"></canvas>
+        </div>
+        <div class="meta">
+          <h2 id="title"></h2>
+          <ul class="detections" id="detections"></ul>
+        </div>
+      </div>
+    </section>
+
+    <p id="placeholder" class="empty-hint">No paired image + prediction files yet.</p>
+  </main>
+
+  <script>
+    const IMAGE_EXT = new Set([
+      ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tif", ".tiff",
+    ]);
+
+    const state = {
+      pairs: [],
+      activeIndex: 0,
+      threshold: 0.5,
+      imagesByStem: new Map(),
+      predsByStem: new Map(),
+    };
+
+    const els = {
+      imagesInput: document.getElementById("images-input"),
+      predsInput: document.getElementById("preds-input"),
+      threshold: document.getElementById("threshold"),
+      thresholdValue: document.getElementById("threshold-value"),
+      status: document.getElementById("status"),
+      viewer: document.getElementById("viewer"),
+      placeholder: document.getElementById("placeholder"),
+      thumbs: document.getElementById("thumbs"),
+      photo: document.getElementById("photo"),
+      overlay: document.getElementById("overlay"),
+      title: document.getElementById("title"),
+      detections: document.getElementById("detections"),
+    };
+
+    function stemFromPath(path) {
+      const name = path.split("/").pop() || path;
+      const dot = name.lastIndexOf(".");
+      return dot >= 0 ? name.slice(0, dot) : name;
+    }
+
+    function stemFromPredFile(path) {
+      const name = path.split("/").pop() || path;
+      const match = name.match(/^(.+)_preds\.json$/i);
+      return match ? match[1] : null;
+    }
+
+    function colorForLabel(label) {
+      let hash = 0;
+      for (let i = 0; i < label.length; i++) {
+        hash = label.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      const hue = Math.abs(hash) % 360;
+      return `hsl(${hue}, 72%, 52%)`;
+    }
+
+    function setStatus(message, kind) {
+      els.status.textContent = message;
+      els.status.className = "status" + (kind ? " " + kind : "");
+    }
+
+    function indexImages(fileList) {
+      const map = new Map();
+      for (const file of fileList) {
+        const rel = file.webkitRelativePath || file.name;
+        const ext = rel.slice(rel.lastIndexOf(".")).toLowerCase();
+        if (!IMAGE_EXT.has(ext)) continue;
+        const stem = stemFromPath(rel);
+        if (!map.has(stem)) map.set(stem, file);
+      }
+      return map;
+    }
+
+    function indexPreds(fileList) {
+      const map = new Map();
+      for (const file of fileList) {
+        const rel = file.webkitRelativePath || file.name;
+        const stem = stemFromPredFile(rel);
+        if (!stem) continue;
+        if (!map.has(stem)) map.set(stem, file);
+      }
+      return map;
+    }
+
+    async function loadPredictions(file) {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!Array.isArray(data)) return [];
+      return data;
+    }
+
+    function normalizeBox(box, imgW, imgH) {
+      if (!box || typeof box !== "object") return null;
+      let xmin = Number(box.xmin ?? box.left ?? 0);
+      let ymin = Number(box.ymin ?? box.top ?? 0);
+      let xmax = Number(box.xmax ?? box.right ?? xmin);
+      let ymax = Number(box.ymax ?? box.bottom ?? ymin);
+
+      if (xmax <= 1 && ymax <= 1 && imgW > 1 && imgH > 1) {
+        xmin *= imgW;
+        ymin *= imgH;
+        xmax *= imgW;
+        ymax *= imgH;
+      }
+
+      if (xmax <= xmin || ymax <= ymin) {
+        const w = Number(box.width ?? 32);
+        const h = Number(box.height ?? 32);
+        xmax = xmin + w;
+        ymax = ymin + h;
+      }
+
+      return { xmin, ymin, xmax, ymax };
+    }
+
+    function buildPairs() {
+      const stems = [...state.predsByStem.keys()].filter((s) => state.imagesByStem.has(s));
+      stems.sort();
+      return stems.map((stem) => ({
+        stem,
+        imageFile: state.imagesByStem.get(stem),
+        predFile: state.predsByStem.get(stem),
+        predictions: null,
+        imageUrl: null,
+      }));
+    }
+
+    async function refreshPairs() {
+      state.pairs = buildPairs();
+      for (const pair of state.pairs) {
+        try {
+          pair.predictions = await loadPredictions(pair.predFile);
+        } catch {
+          pair.predictions = [];
+        }
+        if (pair.imageUrl) URL.revokeObjectURL(pair.imageUrl);
+        pair.imageUrl = URL.createObjectURL(pair.imageFile);
+      }
+
+      const onlyPreds = [...state.predsByStem.keys()].filter((s) => !state.imagesByStem.has(s)).length;
+      const onlyImages = [...state.imagesByStem.keys()].filter((s) => !state.predsByStem.has(s)).length;
+
+      if (!state.imagesByStem.size && !state.predsByStem.size) {
+        setStatus("Choose both folders to begin.");
+        els.viewer.classList.remove("visible");
+        els.placeholder.hidden = false;
+        return;
+      }
+
+      if (!state.pairs.length) {
+        setStatus(
+          "No matching pairs found. Predictions must be named stem_preds.json and sit beside images with the same stem.",
+          "error"
+        );
+        els.viewer.classList.remove("visible");
+        els.placeholder.hidden = false;
+        return;
+      }
+
+      let msg = `Showing ${state.pairs.length} image(s) with predictions.`;
+      if (onlyPreds) msg += ` ${onlyPreds} prediction file(s) without a matching image.`;
+      if (onlyImages) msg += ` ${onlyImages} image(s) without predictions.`;
+      setStatus(msg, "ok");
+
+      els.placeholder.hidden = true;
+      els.viewer.classList.add("visible");
+      state.activeIndex = Math.min(state.activeIndex, state.pairs.length - 1);
+      renderThumbs();
+      showPair(state.activeIndex);
+    }
+
+    function renderThumbs() {
+      els.thumbs.innerHTML = "";
+      state.pairs.forEach((pair, index) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "thumb" + (index === state.activeIndex ? " active" : "");
+        const img = document.createElement("img");
+        img.src = pair.imageUrl;
+        img.alt = "";
+        const span = document.createElement("span");
+        span.textContent = pair.stem;
+        btn.append(img, span);
+        btn.addEventListener("click", () => {
+          state.activeIndex = index;
+          renderThumbs();
+          showPair(index);
+        });
+        els.thumbs.append(btn);
+      });
+    }
+
+    function filteredPredictions(predictions) {
+      return predictions
+        .filter((p) => Number(p.score ?? 0) >= state.threshold)
+        .sort((a, b) => Number(b.score ?? 0) - Number(a.score ?? 0));
+    }
+
+    function drawOverlay(predictions) {
+      const img = els.photo;
+      const canvas = els.overlay;
+      const ctx = canvas.getContext("2d");
+
+      const displayW = img.clientWidth;
+      const displayH = img.clientHeight;
+      const naturalW = img.naturalWidth;
+      const naturalH = img.naturalHeight;
+
+      canvas.width = displayW;
+      canvas.height = displayH;
+      ctx.clearRect(0, 0, displayW, displayH);
+
+      const scaleX = displayW / naturalW;
+      const scaleY = displayH / naturalH;
+
+      for (const pred of predictions) {
+        const box = normalizeBox(pred.box, naturalW, naturalH);
+        if (!box) continue;
+
+        const color = colorForLabel(String(pred.label ?? "object"));
+        const x = box.xmin * scaleX;
+        const y = box.ymin * scaleY;
+        const w = (box.xmax - box.xmin) * scaleX;
+        const h = (box.ymax - box.ymin) * scaleY;
+
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, w, h);
+
+        const label = `${pred.label ?? "?"} ${(Number(pred.score ?? 0) * 100).toFixed(0)}%`;
+        ctx.font = "12px system-ui, sans-serif";
+        const pad = 4;
+        const textW = ctx.measureText(label).width + pad * 2;
+        const textH = 16;
+        ctx.fillStyle = color;
+        ctx.fillRect(x, Math.max(0, y - textH), textW, textH);
+        ctx.fillStyle = "#111";
+        ctx.fillText(label, x + pad, Math.max(12, y - 4));
+      }
+    }
+
+    function renderDetectionList(predictions) {
+      els.detections.innerHTML = "";
+      if (!predictions.length) {
+        const li = document.createElement("li");
+        li.textContent = "No detections above the confidence threshold.";
+        li.style.color = "var(--muted)";
+        els.detections.append(li);
+        return;
+      }
+
+      for (const pred of predictions) {
+        const li = document.createElement("li");
+        const swatch = document.createElement("span");
+        swatch.className = "swatch";
+        swatch.style.background = colorForLabel(String(pred.label ?? "object"));
+        const text = document.createElement("span");
+        text.textContent = `${pred.label ?? "unknown"} — ${(Number(pred.score ?? 0) * 100).toFixed(1)}%`;
+        li.append(swatch, text);
+        els.detections.append(li);
+      }
+    }
+
+    function showPair(index) {
+      const pair = state.pairs[index];
+      if (!pair) return;
+
+      els.photo.onload = () => {
+        const visible = filteredPredictions(pair.predictions);
+        drawOverlay(visible);
+      };
+      els.photo.src = pair.imageUrl;
+      els.title.textContent = pair.stem;
+
+      const visible = filteredPredictions(pair.predictions);
+      renderDetectionList(visible);
+      if (els.photo.complete && els.photo.naturalWidth) {
+        drawOverlay(visible);
+      }
+    }
+
+    function onInputsChanged() {
+      const hasImages = els.imagesInput.files?.length;
+      const hasPreds = els.predsInput.files?.length;
+      if (hasImages) state.imagesByStem = indexImages(els.imagesInput.files);
+      if (hasPreds) state.predsByStem = indexPreds(els.predsInput.files);
+      if (hasImages || hasPreds) refreshPairs();
+    }
+
+    els.imagesInput.addEventListener("change", onInputsChanged);
+    els.predsInput.addEventListener("change", onInputsChanged);
+
+    els.threshold.addEventListener("input", () => {
+      state.threshold = Number(els.threshold.value) / 100;
+      els.thresholdValue.textContent = `${els.threshold.value}%`;
+      showPair(state.activeIndex);
+    });
+
+    window.addEventListener("resize", () => showPair(state.activeIndex));
+  </script>
+</body>
+</html>
